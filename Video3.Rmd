@@ -1,0 +1,63 @@
+## Clustering  
+
+Libraries  
+```{r}
+options(tidyverse.quiet=TRUE)
+library(tidyverse)
+library(cluster) #algorithms for clustering
+library(factoextra) #visualization
+library(dendextend) #viewing clustering dendograms
+```
+
+Read in data  
+```{r}
+customers = read_csv("CustomerData.csv")
+str(customers)
+summary(customers)
+```
+
+Preparing the data. Remove missingness (there is none in this data) or impute missing values.  
+
+We also scale the data. This is critical for quantitative data to ensure that no variable (particularly a variable with large values, skews the data and the resulting clusters).  
+```{r}
+customers_scaled = scale(customers) 
+summary(customers_scaled)
+#scale works by calculating the mean and standard deviation of the entire variable, then scales each element by subtracting the mean and dividing by the standard deviation  
+```
+
+Agglomerative clustering  
+Start by identifying best dissimilarity measure. This is given by highest "agglomerative coefficient".  
+```{r}
+m = c( "average", "single", "complete", "ward")
+names(m) = c( "average", "single", "complete", "ward")
+
+ac = function(x) {
+  agnes(customers_scaled, method = x)$ac
+}
+map_dbl(m, ac)
+```
+
+Ward's is highest. Use this to develop clusters.  
+```{r}
+hc = agnes(customers_scaled, method = "ward") #change ward to other method if desired
+pltree(hc, cex = 0.6, hang = -1, main = "Agglomerative Dendrogram") 
+```
+Divisive clustering  
+```{r}
+hc2 = diana(customers_scaled)
+pltree(hc2, cex = 0.6, hang = -1, main = "Divisive Dendogram")
+```
+
+How do we actually use dendograms?
+```{r}
+plot(hc2, cex.axis= 0.5) 
+rect.hclust(hc2, k = 5, border = 2:6) #border selects colors for the boxes
+```
+
+Can cut the tree to identify groups for each row  
+```{r}
+d = dist(customers_scaled, method = "euclidean") #manually calculate dissimilarity matrix
+hc3 = hclust(d, method = "ward.D") #create agglomerative tree with Ward's distance
+sub_group = cutree(hc3, k = 5) #cut tree into five clusters
+head(sub_group)
+```

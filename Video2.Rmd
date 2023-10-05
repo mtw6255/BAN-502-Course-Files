@@ -1,0 +1,108 @@
+## Clustering  
+
+Libraries  
+```{r, include = FALSE}
+library(tidyverse)
+library(tidymodels)
+#library(cluster) #algorithms for clustering
+```
+
+Read in data  
+```{r}
+beer = read_csv("beers.csv")
+str(beer)
+summary(beer)
+```
+
+Preparing the data. Steps:
+
+1. Use convert the categorical variables into dummy variables
+2. Remove missingness or impute missing values
+3. Scale the data
+
+```{r}
+beer = beer %>% select(-id) %>% select(-style) %>% 
+  select(-brewery_id) %>% #get rid of some columns we don't need
+  mutate(category = as_factor(category)) %>%  #convert to factor
+  drop_na() #row-wise deletion of missingness
+str(beer)
+summary(beer)
+```
+
+```{r}
+kmeans_recipe = recipe(~ abv + ibu + category, beer) 
+
+beer_dummy = kmeans_recipe %>% 
+  step_dummy(all_nominal(), one_hot = TRUE) %>%
+  step_scale(all_numeric()) %>%
+  step_center(all_numeric()) 
+
+beer_dummy = prep(beer_dummy, beer) #prepares the recipe
+
+beer_cleaned = bake(beer_dummy, beer) #applies the recipe and yields a data frame
+```
+
+```{r}
+#we have two data frames now, one scaled and dummied and one with just row-wise deletion of missingness
+summary(beer_cleaned)
+summary(beer)
+```
+
+Perform k-means clustering with a pre-specified number of clusters. We use the scaled and dummied data frame.  
+```{r}
+set.seed(1234)
+clusts = 
+  tibble(k = 1:8) %>%
+  mutate(
+    kclust = map(k, ~kmeans(beer_cleaned, .x)),
+    tidied = map(kclust, tidy),
+    glanced = map(kclust, glance),
+    augmented = map(kclust, augment, beer_cleaned)
+  )
+
+clusts
+```
+
+```{r}
+clusters = 
+  clusts %>%
+  unnest(cols = c(tidied))
+
+assignments = 
+  clusts %>% 
+  unnest(cols = c(augmented))
+
+clusterings = 
+  clusts %>%
+  unnest(cols = c(glanced))
+```
+
+```{r}
+p1 = 
+  ggplot(assignments, aes(x = abv, y = ibu)) +
+  geom_point(aes(color = .cluster), alpha = 0.8) + 
+  facet_wrap(~ k)
+p1
+```
+```{r}
+ggplot(clusterings, aes(k, tot.withinss)) +
+  geom_line() +
+  geom_point()
+```
+
+Let's try 5 clusters  
+```{r}
+set.seed(1234)
+clusters = kmeans(beer_cleaned, 5)
+```
+
+Attach cluster to dataset
+```{r}
+beer = augment(clusters, beer)
+str(beer)
+```
+
+Plots
+```{r}
+ggplot(beer, aes(x=abv,y=ibu,color=factor(.cluster))) + geom_point() + facet_wrap(~factor(category))
+```

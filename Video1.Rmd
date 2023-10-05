@@ -1,0 +1,120 @@
+## Clustering  
+
+Libraries  
+```{r, include = FALSE}
+library(tidyverse)
+library(tidymodels)
+#library(cluster) #algorithms for clustering
+#library(factoextra) #visualization
+```
+
+Basic data that we generate as an example (modification of code borrowed from https://www.tidymodels.org/learn/statistics/k-means/)
+```{r}
+set.seed(27)
+centers = tibble(
+  cluster = factor(1:3), #three clusters
+  num_points = c(70, 120, 40),  # number of points in each cluster
+  x1 = c(5, 0, -3),              # x1 coordinate of cluster centers
+  x2 = c(-1, 1, -2)              # x2 coordinate of cluster centers
+)
+
+labelled_points = 
+  centers %>%
+  mutate(
+    x1 = map2(num_points, x1, rnorm), #randomly generate points for each cluster for x1
+    x2 = map2(num_points, x2, rnorm)  #randomly generate points for each cluster for x2
+  ) %>% 
+  select(-num_points) %>% 
+  unnest(cols = c(x1, x2))
+
+ggplot(labelled_points, aes(x1, x2, color = cluster)) +
+  geom_point(alpha = 0.4) + theme_bw()
+```
+
+```{r}
+points = labelled_points %>% select(-cluster) #get rid of the cluster column
+
+set.seed(123)
+kclust = kmeans(points, centers = 3) #run k-means clustering with k = 3
+kclust #view results
+```
+Add the cluster assignment to the dataset  
+```{r}
+points = augment(kclust, points)
+points
+```
+Plot the clusters
+```{r}
+ggplot(points, aes(x1, x2, color = .cluster)) +
+  geom_point(alpha = 0.4) + theme_bw()
+```
+Read in data for a more practical example  
+```{r}
+customers = read_csv("CustomerData.csv")
+str(customers)
+summary(customers)
+```
+Preparing the data. Remove missingness (there is none in this data) or impute missing values.  
+
+We also scale the data. This is critical for quantitative data to ensure that no variable (particularly a variable with large values, skews the data and the resulting clusters).  
+```{r}
+customers_scaled = scale(customers) 
+summary(customers_scaled)
+#scale works by calculating the mean and standard deviation of the entire variable, then scales each element by subtracting the mean and dividing by the standard deviation  
+```
+
+Perform k-means clustering with a pre-specified number of clusters.   
+```{r}
+set.seed(1234)
+clusts = 
+  tibble(k = 1:10) %>% #try from 1 to 10 clusters
+  mutate(
+    kclust = map(k, ~kmeans(points, .x)),
+    tidied = map(kclust, tidy),
+    glanced = map(kclust, glance),
+    augmented = map(kclust, augment, points)
+  )
+
+clusts
+```
+
+Create relevant objects  
+```{r}
+clusters =
+  clusts %>%
+  unnest(cols = c(tidied))
+
+assignments = 
+  clusts %>% 
+  unnest(cols = c(augmented))
+
+clusterings = 
+  clusts %>%
+  unnest(cols = c(glanced))
+```
+
+Because we are clustering across multiple variables (more than 2 or 3) it's very difficult to plot the clusters in a meaningful way. However, we can look at a plot to see the performance of the clusters.
+```{r}
+ggplot(clusterings, aes(k, tot.withinss)) +
+  geom_line() +
+  geom_point() + theme_bw()
+```
+In the plot above, we are looking for the "elbow". This corresponds to the "best" number of clusters. For this data, 3 or 4 clusters would be appropriate.  
+
+Now we can cluster. Let's go with 4 clusters.  
+```{r}
+cust_clust = kmeans(customers_scaled, centers = 4) #run k-means clustering with k = 4
+cust_clust #view results
+```
+
+Use augment to append the clusters to the data (append to the non-scaled data)  
+```{r}
+customers = augment(cust_clust, customers)
+head(customers)
+```
+We can then explore the data looking for commonalities within the clusters. Note: Visualization would take place on the non-scaled data.    
+
+
+
+
+

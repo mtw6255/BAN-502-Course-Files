@@ -1,0 +1,91 @@
+### Principal Components Analysis
+
+Libraries  
+```{r, include = FALSE}
+library(tidyverse)
+library(tidymodels)
+```
+
+Load data   
+```{r}
+churn = read_csv("churn.csv")
+
+#Delete customer ID column  
+churn = churn %>% select(-customerID)
+
+#Convert all character variables to factors  
+churn = churn %>% mutate_if(is.character,as_factor)
+
+churn = churn %>% mutate(SeniorCitizen = as_factor(SeniorCitizen)) %>%
+  mutate(SeniorCitizen = fct_recode(SeniorCitizen, "No" = "0", "Yes" = "1"))
+
+#Drop missingness by rows
+churn = churn %>% drop_na()
+```
+
+```{r}
+str(churn)
+```
+
+Principal components (with scaling). This chunk sets up the PCA.  
+```{r}
+pca_recipe = recipe(~., churn) %>% #note that there is nothing to the left of the ~
+  update_role(Churn, new_role = "id") %>% #keep this variable around, but not using in our analysis
+  step_dummy(all_nominal()) %>% #dummy the categorical variables
+  step_normalize(all_predictors()) %>% #normalize all of the predictors (all variables except Churn)
+  step_pca(all_predictors()) #do PCA
+```
+
+Execute the PCA with Tidymodels prep function.  
+```{r}
+pca_model = prep(pca_recipe)
+```
+
+```{r}
+tidied_pca = tidy(pca_model, 3)
+
+tidied_pca %>%
+  filter(component %in% paste0("PC", 1:4)) %>%
+  mutate(component = fct_inorder(component)) %>%
+  ggplot(aes(value, terms, fill = terms)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~component, nrow = 1) +
+  labs(y = NULL)
+```
+```{r}
+sdev = pca_model$steps[[3]]$res$sdev
+```
+
+```{r}
+percent_variation = sdev^2 / sum(sdev^2)
+```
+
+```{r}
+var_df = data.frame(PC=paste0("PC",1:length(sdev)),
+                     var_explained=percent_variation,
+                     stringsAsFactors = FALSE)
+```
+
+```{r}
+var_df %>%
+  mutate(PC = fct_inorder(PC)) %>%
+  ggplot(aes(x=PC,y=var_explained))+geom_col() +
+  theme(axis.text.x = element_text(angle = 90))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
